@@ -65,6 +65,10 @@ pids
 desktop.ini
 Thumbs.db
 
+# Temporary scaffolding artifacts
+_tmp_next/
+next-app/
+
 # Python (from other projects, just in case)
 __pycache__/
 *.py[cod]

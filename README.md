@@ -151,7 +151,19 @@ Then:
 npm run dev
 ```
 
-For phone testing: use your PC's local IP (e.g. `http://192.168.1.105:3000`).
+If you hit Turbopack "workspace root" errors (very common on Google Drive):
+
+```powershell
+npm run dev:webpack
+```
+
+**For phone testing on the same WiFi:**
+
+```powershell
+npx next dev -H 0.0.0.0
+```
+
+Find your PC IP (`ipconfig`), then on phone open `http://192.168.x.x:3000`.
 
 Production builds on a real VPS (Linux) usually don't have these path problems.
 

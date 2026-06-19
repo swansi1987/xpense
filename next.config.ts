@@ -1,11 +1,11 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Force webpack instead of Turbopack (more reliable on certain Windows paths)
-  experimental: {
-    // @ts-expect-error - disable turbopack explicitly
-    turbo: false,
+  // Help with workspace root detection on unusual paths (e.g. Google Drive on Windows)
+  turbopack: {
+    root: path.resolve(__dirname),
   },
 };
 
