@@ -127,45 +127,68 @@ Pull requests and issues welcome on the GitHub repo.
 - Data is stored in memory on the server. **Export your trip regularly** (JSON) as backup.
 - On VPS restart you will need to import the last exported file or start a new trip (or add SQLite later).
 
-## Troubleshooting (Windows + Google Drive)
+## Troubleshooting (Windows + Google Drive / OneDrive)
 
-npm install sometimes fails with `ENOTEMPTY` / `EBADF` because of how Google Drive / OneDrive syncs folders.
+**Strongly recommended:** Move or copy this project **outside** of Google Drive for development.
 
-Run this in PowerShell **from the Xpense folder**:
+Example:
+```powershell
+# Copy to a local path (do development here)
+xcopy "G:\My Drive\sudrshn\AI-x\RND\Software\Xpense" "C:\dev\Xpense" /E /I /H
+cd C:\dev\Xpense
+npm install
+npm run dev
+```
+
+Google Drive file sync frequently causes these errors during `npm install`:
+- `EPERM: operation not permitted`
+- `EBADF: bad file descriptor`
+- `ENOTEMPTY`
+
+npm does thousands of small file writes/renames/deletes that fight with Drive's syncing.
+
+### If you must keep it inside Google Drive
+
+Run these commands:
 
 ```powershell
-# Stop node if running
+# 1. Kill anything holding locks
 Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
 
-# Aggressive clean
+# 2. Aggressive clean
 cmd /c "rmdir /s /q node_modules 2>nul"
 Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
 
-# Fresh install
-npm install
+# 3. Clear npm cache
+npm cache clean --force
+
+# 4. Install (sometimes needs a couple of tries)
+npm install --prefer-offline --no-audit --no-fund
 ```
 
-Then:
+If it still fails, the only reliable fix is developing from a local (non-synced) folder.
+
+Then run:
 
 ```powershell
 npm run dev
 ```
 
-If you hit Turbopack "workspace root" errors (very common on Google Drive):
+Fallback if Turbopack complains about root:
 
 ```powershell
 npm run dev:webpack
 ```
 
-**For phone testing on the same WiFi:**
+**Phone testing (same WiFi):**
 
 ```powershell
 npx next dev -H 0.0.0.0
 ```
 
-Find your PC IP (`ipconfig`), then on phone open `http://192.168.x.x:3000`.
+Use your PC's IP from `ipconfig` on the phone: `http://192.168.x.x:3000`
 
-Production builds on a real VPS (Linux) usually don't have these path problems.
+VPS / Linux deployment is unaffected by this (no Drive sync).
 
 ## Next improvements you might want
 
