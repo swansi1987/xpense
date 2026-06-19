@@ -1,0 +1,447 @@
+================================================================================
+PRODUCT REQUIREMENTS DOCUMENT (PRD)
+Xpense — Travel Expense Management Dashboard
+================================================================================
+
+Document Information
+--------------------
+Product Name       : Xpense
+Tagline            : Simple shared expense tracking for group travel
+Version            : 1.0
+Date               : 2026-06-19
+Author             : User + AI Assistant
+Status             : Draft for Implementation
+GitHub             : https://github.com/swansi1987/xpense
+Deployment Target  : VPS (Linux) via git pull + build
+
+================================================================================
+1. Executive Summary
+================================================================================
+
+Xpense is a lightweight, mobile-friendly web application for groups traveling together to record, split, and settle shared expenses in real time.
+
+Core value: Anyone in the group can log expenses from their phone using just their **name and phone number** (no passwords). The app automatically calculates splits, shows who owes whom, and keeps a transparent shared record of the entire trip.
+
+Primary use case: Small to medium travel groups (friends, family, colleagues) who share costs for tickets, hotels, cabs, food, activities, etc.
+
+MVP Goal: A functional, pleasant web dashboard that works great on phones and desktops. Deployed from the GitHub repo to a VPS.
+
+================================================================================
+2. Vision and Strategic Goals
+================================================================================
+
+Vision:
+Make group travel expense tracking effortless and fair — no more WhatsApp spreadsheets, confusing calculations, or one person fronting everything.
+
+Goals:
+- Extremely low friction entry: name + phone only. Open in browser → ready in < 30 seconds.
+- Mobile-first: Works beautifully on phones (primary input device during travel).
+- Real-time shared view: Everyone sees the same current balances.
+- Accurate splitting: Equal split by default + support for custom shares and exclusions.
+- Transparent audit: Clear list of every expense with payer and split details.
+- Easy settlement: At trip end (or anytime), clear "who pays whom" summary.
+- Simple self-hosted deployment for personal / small group use.
+
+Success in Year 1 (personal / small circle):
+- 5-10 real trips successfully managed end-to-end using the app.
+- Zero "I don't understand the numbers" complaints.
+- Usable offline for basic entry (nice-to-have later).
+
+================================================================================
+3. Problem Statement
+================================================================================
+
+Group travel creates messy shared costs:
+- One person books flights/hotels for everyone.
+- Different people pay for cabs, meals, activities.
+- At the end: "Who owes what?" arguments, screenshots of bills, manual Excel.
+- Phone numbers or names are the only identifiers people reliably remember.
+- People want to add expenses immediately while on the move (from phone).
+- Passwords or complex logins are a barrier.
+
+Current solutions (Splitwise, etc.) require accounts, emails, or are overkill / privacy concerns for one-off trips.
+
+Opportunity: A dead-simple, self-hostable, passwordless (name+phone) app focused purely on **travel group expenses** with excellent mobile UX.
+
+================================================================================
+4. Target Users & Personas
+================================================================================
+
+Primary Persona: Trip Organizer / Treasurer (Rohit, 32)
+- Plans the trip for 4–8 people.
+- Pays for big items upfront (flights, hotel).
+- Wants everyone to log their own small spends fairly.
+- Needs clear final settlement numbers at the end of the trip.
+- Uses phone heavily while traveling.
+
+Secondary Personas:
+- Casual participant (Sneha): Just wants to quickly add "I paid 1200 for dinner for 3" from phone.
+- Family trip lead: Wants to track and later show parents/kids what was spent.
+- Tech-comfortable group that prefers self-hosted tools over third-party SaaS.
+
+Key Jobs-to-be-Done:
+- "I paid for something for the group — record it fast."
+- "Show me right now who owes money to whom."
+- "Let me see the full list of everything we spent on this trip."
+- "Split this hotel bill between the 5 of us, but Rahul is not sharing this one."
+
+================================================================================
+5. Success Metrics & KPIs (MVP)
+================================================================================
+
+- Time to first logged expense after opening the site < 60 seconds for a new user.
+- Average group size supported well: 3–10 people.
+- All core flows (add expense, view balances, settlement summary) work on mobile Safari/Chrome.
+- Users can complete a full "trip lifecycle" (create trip → add members → log 15+ expenses → view final settlements).
+- Low support burden: App is obvious enough that WhatsApp questions are minimal.
+
+================================================================================
+6. Product Scope
+================================================================================
+
+6.1 MVP Scope (Must Have for First Release)
+- Web application (responsive, excellent on mobile)
+- Simple passwordless login: Name + Phone number
+  - Phone number normalized (store digits only, display with formatting)
+  - No email, no password, no OTP/SMS. Pure identification for the group.
+- Trip concept:
+  - Create a new trip (name, start/end dates optional, currency)
+  - Add participants (name + phone)
+  - Join existing trip (via trip ID or simple share link/code)
+- Expense entry (mobile friendly form):
+  - Amount
+  - Description / Title
+  - Category (select): Flight/Ticketing, Hotel/Accommodation, Food & Drinks, Local Transport, Cab/Taxi, Activities, Sightseeing, Shopping, Misc/Other
+  - Date (defaults to today)
+  - Paid by (select one participant)
+  - Split among: 
+    - All members equally (default)
+    - Custom: select subset of people + optional custom shares (percent or fixed)
+  - Notes (optional)
+- Dashboard / Home:
+  - Trip summary header (total spent, # expenses, # people)
+  - Balances view: For each person — "Paid", "Share", "Net" (positive = to receive, negative = owes)
+  - Clear "Settle up" section with suggested transfers (minimal number of payments)
+- Expense list:
+  - Chronological list (newest first)
+  - Filter by category, person, date range
+  - Tap to see details / edit / delete
+- Per-person expense view
+- Ability to edit or delete own or all expenses (simple permissions for MVP: anyone in trip can edit)
+- Export: Basic CSV or printable summary
+- Settings for the trip: currency symbol, trip name, add/remove members
+
+6.2 Explicitly Out of Scope for MVP
+- Real authentication (passwords, OAuth, phone OTP)
+- Receipt photo upload / OCR (future)
+- Multi-currency conversion live rates
+- Recurring expenses or templates
+- Notifications / push / email reminders
+- Advanced roles & permissions (admin vs member)
+- Offline-first sync with conflict resolution (basic offline later)
+- Public trip discovery
+- Integration with banks or UPI
+
+6.3 Post-MVP / Nice to Have (Roadmap)
+- Receipt image capture + storage
+- Settlement "mark as paid" tracking
+- Categories with icons and pie chart breakdown
+- Trip templates (common groups of people)
+- Invite via WhatsApp / link that pre-fills name+phone
+- Dark mode + nicer themes
+- PWA install + offline expense queue
+- Postgres ready + proper user accounts later if needed
+- PDF report generation
+
+================================================================================
+7. Functional Requirements
+================================================================================
+
+FR-001: Login / Identity
+- User enters Name and Phone Number on first visit or login screen.
+- System normalizes phone to digits only for matching.
+- Creates or re-uses identity within the scope of the app.
+- Session persists across refreshes (localStorage + server cookie or JWT).
+- No password ever required.
+
+FR-010: Trips
+- Any logged-in user can create a trip.
+- Trip has: id (short, shareable), name, created_at, optional start_date, end_date, default_currency.
+- Participants belong to a trip (can be added at creation or later).
+- Participant: { name, phone, joined_at }
+
+FR-020: Adding Expenses
+- Logged in user (who is a participant in the trip) can add expense.
+- Required: amount (>0), description, paid_by (participant id), split_details.
+- Split details support:
+  a) Equal split among N selected people
+  b) Custom amounts or percentages
+- Backend stores the exact share for each participant for that expense (denormalized for easy queries).
+- All amounts stored in smallest unit (paise / cents) to avoid floating point issues.
+
+FR-030: Viewing & Calculations
+- Total spent for trip.
+- For every participant in a trip:
+  - total_paid (sum of expenses where they are payer)
+  - total_share (sum of their portions across all expenses)
+  - net_balance = total_paid - total_share
+- Settlement suggestions: algorithm to minimize number of payments (greedy or standard settlement).
+- Expense list with full details: who paid, split breakdown visible.
+
+FR-040: Editing & Deleting
+- Any trip member can edit or delete an expense (MVP simplification).
+- On edit, recalculate all affected shares and balances immediately.
+
+FR-050: Mobile Experience
+- All forms usable with thumb on phone.
+- Large tap targets.
+- Amount input focused by default on add expense.
+- Date picker mobile friendly.
+- Category selection as nice chips or grid of icons.
+
+FR-060: Data Export & Reporting
+- Export all expenses as CSV.
+- View or print a "Trip Summary" page with balances and suggested settlements.
+
+================================================================================
+8. Non-Functional Requirements
+================================================================================
+
+NFR-001: Accessibility & Mobile
+- Fully responsive. Primary usage on mobile browsers.
+- WCAG 2.1 AA for forms and main views where practical.
+- Fast load on 3G/4G.
+
+NFR-002: Performance
+- Dashboard and expense list load < 1s on typical VPS + mobile.
+- Adding an expense feels instant (optimistic UI or quick feedback).
+
+NFR-003: Data Integrity
+- All splits always add up exactly to the expense amount (server validation).
+- No negative amounts.
+- Soft deletes or audit log for changes (MVP: simple delete with confirmation).
+
+NFR-004: Security & Privacy (Realistic for this model)
+- This is a "trusted group" app. No strong auth.
+- Phone number is used purely as a stable identifier, not verified.
+- Do not log raw expenses or balances to public places.
+- Deployed behind HTTPS on VPS (user responsibility).
+- Recommend running behind reverse proxy with basic auth or IP restriction if extra privacy needed.
+- No third-party analytics by default.
+
+NFR-005: Deployment & Dev Workflow (Critical)
+- Development happens locally.
+- Code pushed to https://github.com/swansi1987/xpense
+- VPS does: git pull → install/build → restart service.
+- Must provide clear, repeatable deploy instructions (Docker preferred or PM2 + Node).
+- Environment variables for:
+  - Database path / connection
+  - Session secret
+  - Port
+  - Base URL (for share links)
+
+NFR-006: Simplicity of Self-Hosting
+- Prefer minimal external services.
+- SQLite is acceptable for MVP and small groups.
+- Single docker-compose up should be possible.
+- Or simple `npm run build && pm2 start`.
+
+================================================================================
+9. Technical Architecture & Recommendations
+================================================================================
+
+Recommended Stack (MVP):
+- Framework: Next.js 15 (App Router) with TypeScript
+- Styling: Tailwind CSS + shadcn/ui components (or Radix + lucide icons)
+- Database: 
+  - Primary recommendation: SQLite (better-sqlite3 or Prisma + SQLite)
+  - Alternative for scale: PostgreSQL (same Prisma schema)
+- ORM / Query: Prisma or Drizzle ORM (for easy migrations)
+- State & Forms: React Hook Form + Zod validation
+- Auth/Session: Simple custom implementation
+  - Login creates or finds user by normalized phone
+  - Issue httpOnly cookie or short JWT containing userId + current trip context
+  - Trip membership checked on all mutating operations
+- API: Next.js Route Handlers / Server Actions
+- Mobile experience: Responsive + add PWA manifest + service worker (optional Phase 1)
+
+Alternative Considered:
+- Python FastAPI + React/Vite or HTMX + Jinja. More consistent with other projects in the folder but heavier frontend separation.
+
+Decision: Next.js gives best "it just works on phone" dashboard experience with least glue code.
+
+Data Model (High Level):
+
+Trip
+- id (cuid or short code)
+- name
+- currency (e.g. "INR")
+- created_by_user_id
+- created_at, updated_at
+
+User (global, identified by phone)
+- id
+- name
+- phone (normalized digits)
+- created_at
+
+TripMember (junction)
+- id
+- trip_id
+- user_id
+- display_name (copy at join time in case they change)
+- joined_at
+
+Expense
+- id
+- trip_id
+- description
+- amount (integer, minor units)
+- currency
+- category
+- expense_date
+- paid_by_user_id
+- notes?
+- created_by_user_id
+- created_at
+
+ExpenseShare (one row per person per expense)
+- id
+- expense_id
+- user_id
+- share_amount (integer)
+- is_payer (or compute via paid_by)
+
+This denormalized share model makes balance queries trivial and correct.
+
+================================================================================
+10. User Flows (Key Screens)
+================================================================================
+
+1. Landing / Login
+   - Big friendly "Xpense" header
+   - "Enter your name" + "Phone number" fields
+   - "Continue" → If no trip context, show "Create new trip" or "Join trip"
+
+2. Trip Dashboard (main view when inside a trip)
+   - Trip name + total spent + people count
+   - Tabs or sections: Overview (balances) | Expenses | Settle Up
+   - Big floating + button for "Add Expense"
+
+3. Add Expense (modal or full screen on mobile)
+   - Amount (numeric keypad friendly)
+   - Description
+   - Category pills/grid
+   - Paid by (avatar or name list of members)
+   - Split with: "Everyone" (default) | "Select people" → then advanced share editor
+   - Date
+   - Notes
+   - Save
+
+4. Balances View
+   - Cards or table: Person | Paid | Their Share | Balance (color coded green/red)
+   - Settle section: "Rahul should pay Priya ₹2450", "Ankit should pay Rahul ₹800", etc.
+
+5. Expense List
+   - Search + filters
+   - Each row: date | desc | paid by | amount | "split between X people"
+   - Tap → detail + edit/delete
+
+6. Trip Settings
+   - Rename trip
+   - Manage members (add by name+phone, remove)
+   - Export data
+   - Leave trip / delete trip (with warnings)
+
+================================================================================
+11. User Stories (Prioritized)
+================================================================================
+
+MVP Must:
+- As a user, I can sign in with just my name and phone number.
+- As a user, I can create a trip and invite others by sharing a link or code.
+- As a user, I can add an expense paid by me, split equally among all.
+- As a user, I can add an expense and specify it should be split only among 3 out of 5 people.
+- As a user, I can see at a glance the current net balance for every person.
+- As a user, I can see a suggested list of who should pay whom to settle.
+- As a user, I can view the full history of expenses on my phone.
+- As a user, I can edit or delete an expense I added (or any, for MVP).
+
+Post MVP:
+- As a user, I can upload a photo of the bill with the expense.
+- As a user, I receive a nice printable or shareable trip report at the end.
+- As organizer, I can mark certain expenses as "settled between A and B".
+
+================================================================================
+12. Risks, Mitigations & Assumptions
+================================================================================
+
+Risks:
+- People enter wrong phone numbers → duplicate identities. Mitigation: Show list of known names/phones in trip, allow editing display name.
+- Malicious or accidental wrong entries by group members. Mitigation: Simple edit history + confirmation dialogs. Trust model accepted.
+- Data loss on VPS. Mitigation: Regular SQLite backups recommended in docs. Easy export always available.
+- Floating point / rounding issues on splits. Mitigation: Store everything in integers (paise), careful share calculation.
+
+Assumptions:
+- Small trusted groups (4–12 people). Not designed for large public events.
+- Users are okay with "name + phone" as the security model.
+- One trip at a time per group (user can be in multiple trips later).
+- Currency is the same for the entire trip (MVP).
+
+================================================================================
+13. Deployment & Development Workflow
+================================================================================
+
+Local Development:
+1. Clone repo
+2. npm install
+3. cp .env.example .env.local  (configure DATABASE_URL or sqlite path)
+4. npx prisma migrate dev (or equivalent)
+5. npm run dev
+6. Open http://localhost:3000 on phone or desktop (use local IP for phone testing)
+
+Git Workflow:
+- Develop locally on feature branches or main.
+- Commit and `git push` to https://github.com/swansi1987/xpense
+
+VPS Deployment (example):
+1. SSH into VPS
+2. cd /opt/xpense
+3. git pull origin main
+4. npm ci --production
+5. npx prisma migrate deploy
+6. npm run build
+7. Restart service (pm2 restart xpense or docker compose restart)
+
+Recommended production setup:
+- Node.js + PM2 or Docker + reverse proxy (nginx / caddy)
+- HTTPS (Let's Encrypt)
+- Environment: DATABASE_URL, SESSION_SECRET, PORT, PUBLIC_URL
+- Automated backup of SQLite file or Postgres dumps
+
+Provide a docker-compose.yml and Dockerfile in the repo for easiest VPS deploy.
+
+================================================================================
+14. Open Questions & Future Decisions
+================================================================================
+
+- Should we use Prisma + SQLite or raw better-sqlite3 for MVP?
+- Do we support multiple currencies per trip in v1?
+- Exact format of trip share link (xpense.app/t/abc123 or self-hosted /trip/xyz)?
+- Do we want categories to be customizable per trip?
+- How strict should we be with "only trip members can add expenses"?
+
+================================================================================
+15. Glossary
+================================================================================
+- Net Balance: What a person is owed (positive) or owes (negative) after all splits.
+- Settlement: The minimal set of transfers that brings everyone's net to zero.
+- Normalized Phone: Phone number with only digits, no spaces, +, -, ().
+
+================================================================================
+End of PRD v1.0
+================================================================================
+
+Change Log
+- 2026-06-19: Initial PRD created per user requirements for travel group expense tracking with passwordless name+phone login.
+================================================================================
