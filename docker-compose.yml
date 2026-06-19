@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  xpense:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - PUBLIC_URL=http://localhost:3000
+      # Add SESSION_SECRET=... for extra security if extending auth
+    restart: unless-stopped
+    volumes:
+      # Optional: persist nothing currently because in-memory. Add later for SQLite.
+      - ./data:/app/data
