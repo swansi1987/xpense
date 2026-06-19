@@ -123,9 +123,47 @@ Pull requests and issues welcome on the GitHub repo.
 
 ## Important Notes
 
-- This is a **trusted-group** tool. Anyone who knows the trip link and enters a name+phone can participate.
-- Always keep a backup of your database (especially SQLite).
-- Export your data regularly.
+- This is a **trusted-group** tool. Anyone who knows the trip code and enters a name+phone can participate.
+- Data is stored in memory on the server. **Export your trip regularly** (JSON) as backup.
+- On VPS restart you will need to import the last exported file or start a new trip (or add SQLite later).
+
+## Troubleshooting (Windows + Google Drive)
+
+npm install sometimes fails with `ENOTEMPTY` / `EBADF` because of how Google Drive / OneDrive syncs folders.
+
+Run this in PowerShell **from the Xpense folder**:
+
+```powershell
+# Stop node if running
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Aggressive clean
+cmd /c "rmdir /s /q node_modules 2>nul"
+Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+
+# Fresh install
+npm install
+```
+
+Then:
+
+```powershell
+npm run dev
+```
+
+For phone testing: use your PC's local IP (e.g. `http://192.168.1.105:3000`).
+
+Production builds on a real VPS (Linux) usually don't have these path problems.
+
+## Next improvements you might want
+
+- Switch to SQLite (persistent across restarts)
+- Receipt photo upload
+- Better settlement "mark as paid"
+- CSV export
+- PWA "Add to Home Screen" for phones
+
+Let me know what to build next!
 
 ---
 
