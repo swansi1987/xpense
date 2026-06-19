@@ -63,24 +63,40 @@ See detailed requirements and data model in [PRD.txt](./PRD.txt).
 
 - Next.js 15 (TypeScript, App Router)
 - Tailwind + modern UI components
-- SQLite (or PostgreSQL) via Prisma/Drizzle
+- SQLite (file-based, via better-sqlite3) for persistence
 - Simple custom session (name + phone identification)
 
 Full architecture decisions and data model are in `PRD.txt`.
 
 ## Deployment on VPS
 
-Typical flow:
+Typical flow (non-Docker):
 
 ```bash
 ssh user@your-vps
 cd /opt/xpense
 git pull origin main
 npm ci
-npx prisma migrate deploy
 npm run build
-pm2 restart xpense   # or docker compose restart
+pm2 restart xpense
 ```
+
+For Docker:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+The SQLite database (`xpense.db`) will be created automatically on first run.
+
+**Docker data persistence (survives system/container restarts):**
+- The `./data` directory on host is mounted to `/app/data` in container.
+- `DATABASE_URL` points to `file:/app/data/xpense.db`
+- After first run, `data/xpense.db` (and -wal/-shm) will appear locally.
+- If permission errors: `chmod -R 777 data` or `chown -R 1001:1001 data` (matches nextjs user in container).
+
+Non-Docker VPS: just keep `xpense.db` in the project dir.
 
 HTTPS via nginx + Let's Encrypt (or Caddy) is strongly recommended.
 
@@ -94,10 +110,9 @@ xpense/
 ├── README.md
 ├── app/                  # Next.js app router
 ├── components/
-├── lib/                  # db, utils, auth helpers
-├── prisma/ or db/        # schema + migrations
+├── lib/                  # db.ts (SQLite), store.ts, types.ts
 ├── public/
-└── ...
+└── xpense.db (auto-created, gitignored)
 ```
 
 ## Login Model
