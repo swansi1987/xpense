@@ -29,20 +29,35 @@ See detailed requirements in [PRD.txt](./PRD.txt).
 ## Quick Start (Local)
 
 ```powershell
-# Clone
 git clone https://github.com/swansi1987/xpense.git
 cd xpense
 
-# Install (once Next.js app is set up)
 npm install
-
-# Start dev server
 npm run dev
 ```
 
-Open http://localhost:3000 on your phone or computer.
+Open http://localhost:3000 (or your LAN IP from another phone on the same WiFi).
 
-For phone testing on the same network, use your machine's local IP instead of localhost.
+**How to use on mobile during travel:**
+1. Everyone opens the site on their phone browser.
+2. Each person enters their own Name + Phone (no password).
+3. One person creates the trip and shares the **6-character trip code**.
+4. Everyone else joins using the code.
+
+## Development Workflow
+
+1. Develop and test locally (`npm run dev`)
+2. `git push` to https://github.com/swansi1987/xpense
+3. On VPS:
+   ```bash
+   git pull
+   npm install
+   npm run build
+   npm start
+   # or with PM2 / Docker
+   ```
+
+See detailed requirements and data model in [PRD.txt](./PRD.txt).
 
 ## Tech Stack (Recommended in PRD)
 
