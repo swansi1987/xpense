@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createTrip, addMember, addExpense } from "../../../lib/store";
-import { Trip } from "../../../lib/types";
+import { createTrip, addMember, addExpense } from "@/lib/store";
+import { Trip } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {

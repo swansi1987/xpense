@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addMember, getTrip } from "../../../../../lib/store";
+import { addMember, getTrip } from "@/lib/store";
 
 export async function POST(
   request: NextRequest,

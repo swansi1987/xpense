@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createTrip } from "../../../lib/store";
+import { createTrip } from "@/lib/store";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();

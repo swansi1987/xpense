@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateExpense, deleteExpense, getTrip } from "../../../../../../lib/store";
-import { Category } from "../../../../../../lib/types";
+import { updateExpense, deleteExpense, getTrip } from "@/lib/store";
+import { Category } from "@/lib/types";
 
 export async function PATCH(
   request: NextRequest,

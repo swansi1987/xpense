@@ -23,7 +23,7 @@ import {
   Settlement,
   normalizePhone,
   formatAmount,
-} from "../lib/types";
+} from "@/lib/types";
 
 // Local type for current user
 interface CurrentUser {

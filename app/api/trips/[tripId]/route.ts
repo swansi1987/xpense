@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTrip } from "../../../../lib/store";
+import { getTrip } from "@/lib/store";
 
 export async function GET(
   _req: NextRequest,
