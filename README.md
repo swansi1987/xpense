@@ -124,8 +124,9 @@ Pull requests and issues welcome on the GitHub repo.
 ## Important Notes
 
 - This is a **trusted-group** tool. Anyone who knows the trip code and enters a name+phone can participate.
-- Data is stored in memory on the server. **Export your trip regularly** (JSON) as backup.
-- On VPS restart you will need to import the last exported file or start a new trip (or add SQLite later).
+- **Data is now persisted** using SQLite (`xpense.db` in the project root).
+- On VPS restart your trips and expenses will still be there.
+- Still recommended to periodically export (JSON) as an extra backup.
 
 ## Troubleshooting (Windows + Google Drive / OneDrive)
 

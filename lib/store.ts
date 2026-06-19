@@ -9,37 +9,92 @@ import {
   Settlement,
 } from "./types";
 import { randomUUID } from "crypto";
+import { getDb } from "./db";
 
-// In-memory store. Data lives for the lifetime of the Node process.
-// Perfect for a small group trip on a VPS. Export often as backup.
-const trips = new Map<string, Trip>();
+// === Persistent store using SQLite ===
+// Data survives server restarts. Perfect for VPS deploys.
 
 function generateShortId(): string {
-  // Short human-friendly trip code
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-export function createTrip(name: string, currency = "INR", symbol = "₹"): Trip {
-  const id = generateShortId();
-  const trip: Trip = {
-    id,
-    name: name.trim() || "Untitled Trip",
-    currency,
-    currencySymbol: symbol,
-    createdAt: new Date().toISOString(),
-    members: [],
-    expenses: [],
+// Hydrate a full Trip object from DB (members + expenses + shares)
+function hydrateTrip(tripId: string): Trip | undefined {
+  const db = getDb();
+
+  const tripRow = db
+    .prepare("SELECT * FROM trips WHERE id = ?")
+    .get(tripId) as any;
+  if (!tripRow) return undefined;
+
+  const members = db
+    .prepare(
+      "SELECT user_id as userId, name, phone FROM members WHERE trip_id = ? ORDER BY joined_at"
+    )
+    .all(tripId) as TripMember[];
+
+  const expensesRows = db
+    .prepare(
+      `SELECT id, description, amount, category, expense_date as expenseDate, 
+              paid_by_user_id as paidByUserId, notes, created_at as createdAt
+       FROM expenses 
+       WHERE trip_id = ? 
+       ORDER BY created_at DESC`
+    )
+    .all(tripId) as any[];
+
+  const expenses: Expense[] = expensesRows.map((e) => {
+    const shares = db
+      .prepare(
+        "SELECT user_id as userId, amount FROM expense_shares WHERE expense_id = ?"
+      )
+      .all(e.id) as ExpenseShare[];
+
+    return {
+      id: e.id,
+      description: e.description,
+      amount: e.amount,
+      category: e.category,
+      expenseDate: e.expenseDate,
+      paidByUserId: e.paidByUserId,
+      shares,
+      notes: e.notes || undefined,
+      createdAt: e.createdAt,
+    };
+  });
+
+  return {
+    id: tripRow.id,
+    name: tripRow.name,
+    currency: tripRow.currency,
+    currencySymbol: tripRow.currency_symbol,
+    createdAt: tripRow.created_at,
+    members,
+    expenses,
   };
-  trips.set(id, trip);
-  return trip;
+}
+
+export function createTrip(name: string, currency = "INR", symbol = "₹"): Trip {
+  const db = getDb();
+  const id = generateShortId();
+  const createdAt = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO trips (id, name, currency, currency_symbol, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(id, name.trim() || "Untitled Trip", currency, symbol, createdAt);
+
+  return hydrateTrip(id)!;
 }
 
 export function getTrip(tripId: string): Trip | undefined {
-  return trips.get(tripId);
+  return hydrateTrip(tripId.toUpperCase());
 }
 
 export function getAllTrips(): Trip[] {
-  return Array.from(trips.values());
+  const db = getDb();
+  const rows = db.prepare("SELECT id FROM trips ORDER BY created_at DESC").all() as any[];
+  return rows.map((r) => hydrateTrip(r.id)).filter(Boolean) as Trip[];
 }
 
 export function addMember(
@@ -47,41 +102,43 @@ export function addMember(
   name: string,
   phone: string
 ): TripMember | null {
-  const trip = trips.get(tripId);
-  if (!trip) return null;
-
+  const db = getDb();
+  const normTripId = tripId.toUpperCase();
   const normalized = normalizePhone(phone);
-  const existing = trip.members.find((m) => m.phone === normalized);
+
+  // Check if trip exists
+  const tripExists = db.prepare("SELECT 1 FROM trips WHERE id = ?").get(normTripId);
+  if (!tripExists) return null;
+
+  // Check for existing by phone within this trip
+  const existing = db
+    .prepare("SELECT user_id as userId, name, phone FROM members WHERE trip_id = ? AND phone = ?")
+    .get(normTripId, normalized) as TripMember | undefined;
 
   if (existing) {
-    // Update name if changed
-    existing.name = name.trim();
-    return existing;
+    // Update display name if changed
+    db.prepare("UPDATE members SET name = ? WHERE trip_id = ? AND phone = ?")
+      .run(name.trim(), normTripId, normalized);
+    return { ...existing, name: name.trim() };
   }
 
-  const member: TripMember = {
-    userId: randomUUID(),
-    name: name.trim(),
-    phone: normalized,
-  };
-  trip.members.push(member);
-  return member;
+  const userId = randomUUID();
+  const joinedAt = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO members (user_id, trip_id, name, phone, joined_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(userId, normTripId, name.trim(), normalized, joinedAt);
+
+  return { userId, name: name.trim(), phone: normalized };
 }
 
 export function removeMember(tripId: string, userId: string): boolean {
-  const trip = trips.get(tripId);
-  if (!trip) return false;
+  const db = getDb();
+  const normTripId = tripId.toUpperCase();
 
-  // Don't allow removing if they have expenses paid or shares (simplified for MVP)
-  const hasExpenses = trip.expenses.some(
-    (e) => e.paidByUserId === userId || e.shares.some((s) => s.userId === userId)
-  );
-
-  if (hasExpenses) {
-    // Still allow removal but we will keep historical data
-  }
-
-  trip.members = trip.members.filter((m) => m.userId !== userId);
+  // Optional: keep historical expenses even after remove (current behavior)
+  db.prepare("DELETE FROM members WHERE trip_id = ? AND user_id = ?").run(normTripId, userId);
   return true;
 }
 
@@ -89,62 +146,70 @@ export function addExpense(
   tripId: string,
   input: {
     description: string;
-    amount: number; // rupees, will convert to paise
+    amount: number;
     category: Category;
     expenseDate: string;
     paidByUserId: string;
-    splitUserIds: string[]; // people who share this expense
-    customShares?: { userId: string; amount: number }[]; // optional absolute paise
+    splitUserIds: string[];
+    customShares?: { userId: string; amount: number }[];
     notes?: string;
   }
 ): Expense | null {
-  const trip = trips.get(tripId);
+  const db = getDb();
+  const normTripId = tripId.toUpperCase();
+
+  const trip = getTrip(normTripId);
   if (!trip) return null;
 
   const totalPaise = Math.round(input.amount * 100);
-
-  if (totalPaise <= 0) return null;
-  if (input.splitUserIds.length === 0) return null;
+  if (totalPaise <= 0 || input.splitUserIds.length === 0) return null;
 
   let shares: ExpenseShare[];
 
-  if (input.customShares && input.customShares.length > 0) {
-    shares = input.customShares.map((cs) => ({
-      userId: cs.userId,
-      amount: cs.amount,
-    }));
-    // Verify sum matches total
+  if (input.customShares?.length) {
+    shares = input.customShares.map((cs) => ({ userId: cs.userId, amount: cs.amount }));
     const sum = shares.reduce((a, b) => a + b.amount, 0);
     if (sum !== totalPaise) {
-      // Adjust last share
-      const diff = totalPaise - sum;
-      shares[shares.length - 1].amount += diff;
+      shares[shares.length - 1].amount += totalPaise - sum;
     }
   } else {
-    // Equal split
     const perPerson = Math.floor(totalPaise / input.splitUserIds.length);
     let remainder = totalPaise - perPerson * input.splitUserIds.length;
-
     shares = input.splitUserIds.map((uid, idx) => ({
       userId: uid,
       amount: perPerson + (idx === 0 ? remainder : 0),
     }));
   }
 
-  const expense: Expense = {
-    id: randomUUID(),
-    description: input.description.trim(),
-    amount: totalPaise,
-    category: input.category,
-    expenseDate: input.expenseDate,
-    paidByUserId: input.paidByUserId,
-    shares,
-    notes: input.notes?.trim(),
-    createdAt: new Date().toISOString(),
-  };
+  const expenseId = randomUUID();
+  const createdAt = new Date().toISOString();
 
-  trip.expenses.unshift(expense); // newest first
-  return expense;
+  // Insert expense
+  db.prepare(
+    `INSERT INTO expenses 
+     (id, trip_id, description, amount, category, expense_date, paid_by_user_id, notes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    expenseId,
+    normTripId,
+    input.description.trim(),
+    totalPaise,
+    input.category,
+    input.expenseDate,
+    input.paidByUserId,
+    input.notes?.trim() || null,
+    createdAt
+  );
+
+  // Insert shares
+  const insertShare = db.prepare(
+    "INSERT INTO expense_shares (expense_id, user_id, amount) VALUES (?, ?, ?)"
+  );
+  for (const s of shares) {
+    insertShare.run(expenseId, s.userId, s.amount);
+  }
+
+  return getTrip(normTripId)!.expenses.find((e) => e.id === expenseId)!;
 }
 
 export function updateExpense(
@@ -160,74 +225,90 @@ export function updateExpense(
     notes: string;
   }>
 ): Expense | null {
-  const trip = trips.get(tripId);
-  if (!trip) return null;
+  const db = getDb();
+  const normTripId = tripId.toUpperCase();
 
-  const idx = trip.expenses.findIndex((e) => e.id === expenseId);
-  if (idx === -1) return null;
+  const existing = db.prepare("SELECT * FROM expenses WHERE id = ? AND trip_id = ?").get(expenseId, normTripId) as any;
+  if (!existing) return null;
 
-  const exp = trip.expenses[idx];
-
-  if (input.description !== undefined) exp.description = input.description.trim();
-  if (input.category !== undefined) exp.category = input.category;
-  if (input.expenseDate !== undefined) exp.expenseDate = input.expenseDate;
-  if (input.notes !== undefined) exp.notes = input.notes.trim();
-  if (input.paidByUserId !== undefined) exp.paidByUserId = input.paidByUserId;
+  let newAmount = existing.amount;
+  let newShares: ExpenseShare[] | null = null;
 
   if (input.amount !== undefined) {
-    const newTotal = Math.round(input.amount * 100);
-    exp.amount = newTotal;
+    newAmount = Math.round(input.amount * 100);
+  }
 
-    // Recompute equal shares using current members in the expense's shares
-    const currentSplitIds = exp.shares.map((s) => s.userId);
-    const perPerson = Math.floor(newTotal / currentSplitIds.length);
-    let rem = newTotal - perPerson * currentSplitIds.length;
+  // Determine final split
+  const finalSplitIds =
+    input.splitUserIds && input.splitUserIds.length > 0
+      ? input.splitUserIds
+      : db
+          .prepare("SELECT user_id FROM expense_shares WHERE expense_id = ?")
+          .all(expenseId)
+          .map((r: any) => r.user_id);
 
-    exp.shares = currentSplitIds.map((uid, i) => ({
+  if (input.amount !== undefined || input.splitUserIds) {
+    const perPerson = Math.floor(newAmount / finalSplitIds.length);
+    let rem = newAmount - perPerson * finalSplitIds.length;
+    newShares = finalSplitIds.map((uid, i) => ({
       userId: uid,
       amount: perPerson + (i === 0 ? rem : 0),
     }));
   }
 
-  if (input.splitUserIds !== undefined && input.splitUserIds.length > 0) {
-    const newTotal = exp.amount;
-    const perPerson = Math.floor(newTotal / input.splitUserIds.length);
-    let rem = newTotal - perPerson * input.splitUserIds.length;
-    exp.shares = input.splitUserIds.map((uid, i) => ({
-      userId: uid,
-      amount: perPerson + (i === 0 ? rem : 0),
-    }));
+  // Update expense row
+  db.prepare(
+    `UPDATE expenses SET 
+       description = COALESCE(?, description),
+       amount = ?,
+       category = COALESCE(?, category),
+       expense_date = COALESCE(?, expense_date),
+       paid_by_user_id = COALESCE(?, paid_by_user_id),
+       notes = COALESCE(?, notes)
+     WHERE id = ?`
+  ).run(
+    input.description?.trim() ?? null,
+    newAmount,
+    input.category ?? null,
+    input.expenseDate ?? null,
+    input.paidByUserId ?? null,
+    input.notes?.trim() ?? null,
+    expenseId
+  );
+
+  // Replace shares if changed
+  if (newShares) {
+    db.prepare("DELETE FROM expense_shares WHERE expense_id = ?").run(expenseId);
+    const insert = db.prepare("INSERT INTO expense_shares (expense_id, user_id, amount) VALUES (?, ?, ?)");
+    for (const s of newShares) {
+      insert.run(expenseId, s.userId, s.amount);
+    }
   }
 
-  return exp;
+  return getTrip(normTripId)!.expenses.find((e) => e.id === expenseId)!;
 }
 
 export function deleteExpense(tripId: string, expenseId: string): boolean {
-  const trip = trips.get(tripId);
-  if (!trip) return false;
-  const before = trip.expenses.length;
-  trip.expenses = trip.expenses.filter((e) => e.id !== expenseId);
-  return trip.expenses.length < before;
+  const db = getDb();
+  const result = db.prepare("DELETE FROM expenses WHERE id = ? AND trip_id = ?").run(expenseId, tripId.toUpperCase());
+  return result.changes > 0;
 }
 
-// === Calculations ===
+// === Calculations (unchanged - operate on hydrated Trip) ===
 
 export function calculateBalances(trip: Trip): Balance[] {
   const paidMap = new Map<string, number>();
   const shareMap = new Map<string, number>();
 
-  // Initialize for all current members
   trip.members.forEach((m) => {
     paidMap.set(m.userId, 0);
     shareMap.set(m.userId, 0);
   });
 
   for (const exp of trip.expenses) {
-    // What was paid
     const prevPaid = paidMap.get(exp.paidByUserId) || 0;
     paidMap.set(exp.paidByUserId, prevPaid + exp.amount);
 
-    // What each person shares
     for (const share of exp.shares) {
       const prevShare = shareMap.get(share.userId) || 0;
       shareMap.set(share.userId, prevShare + share.amount);
@@ -251,41 +332,29 @@ export function calculateBalances(trip: Trip): Balance[] {
 
 export function calculateSettlements(balances: Balance[]): Settlement[] {
   const settlements: Settlement[] = [];
+  const creditors = balances.filter((b) => b.net > 0).map((b) => ({ ...b }));
+  const debtors = balances.filter((b) => b.net < 0).map((b) => ({ ...b }));
 
-  // Make working copies
-  const creditors = balances
-    .filter((b) => b.net > 0)
-    .map((b) => ({ ...b }));
-  const debtors = balances
-    .filter((b) => b.net < 0)
-    .map((b) => ({ ...b }));
-
-  let i = 0;
-  let j = 0;
-
+  let i = 0, j = 0;
   while (i < creditors.length && j < debtors.length) {
     const cred = creditors[i];
     const debt = debtors[j];
+    const amt = Math.min(cred.net, -debt.net);
 
-    const amount = Math.min(cred.net, -debt.net);
-
-    if (amount > 0) {
+    if (amt > 1) {
       settlements.push({
         fromUserId: debt.userId,
         fromName: debt.name,
         toUserId: cred.userId,
         toName: cred.name,
-        amount,
+        amount: amt,
       });
-
-      cred.net -= amount;
-      debt.net += amount;
     }
-
-    if (cred.net === 0) i++;
-    if (debt.net === 0) j++;
+    cred.net -= amt;
+    debt.net += amt;
+    if (cred.net < 1) i++;
+    if (debt.net > -1) j++;
   }
-
   return settlements;
 }
 
