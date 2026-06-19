@@ -20,7 +20,40 @@ export function getDb() {
   db.pragma('foreign_keys = ON');
 
   initSchema(db);
+  migrateSchema(db);
   return db;
+}
+
+function migrateSchema(db: Database.Database) {
+  // Earlier versions declared an invalid FK: expense_shares.user_id -> members(user_id).
+  // members has a composite PK (user_id, trip_id), so referencing user_id alone fails on insert.
+  // Detect and recreate the table without that constraint, preserving existing share rows.
+  const tableInfo = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'expense_shares'"
+  ).get();
+  if (!tableInfo) return;
+
+  const fkList = db.pragma('foreign_key_list(expense_shares)') as any[];
+  const hasBadFk = fkList.some((fk) => fk.table === 'members' && fk.from === 'user_id');
+  if (!hasBadFk) return;
+
+  db.exec(`
+    BEGIN TRANSACTION;
+    ALTER TABLE expense_shares RENAME TO expense_shares_old;
+    CREATE TABLE expense_shares (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      expense_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
+    );
+    INSERT INTO expense_shares (id, expense_id, user_id, amount)
+      SELECT old.id, old.expense_id, old.user_id, old.amount
+      FROM expense_shares_old old
+      JOIN expenses e ON e.id = old.expense_id;
+    DROP TABLE expense_shares_old;
+    COMMIT;
+  `);
 }
 
 function initSchema(db: Database.Database) {
@@ -61,8 +94,7 @@ function initSchema(db: Database.Database) {
       expense_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
       amount INTEGER NOT NULL,
-      FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES members(user_id)  -- loose, since per trip
+      FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
     );
 
     CREATE INDEX IF NOT EXISTS idx_members_trip ON members(trip_id);

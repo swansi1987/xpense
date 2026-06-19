@@ -356,6 +356,14 @@ export default function XpenseApp() {
       toast.error("Enter a description");
       return;
     }
+    if (!expenseForm.paidByUserId) {
+      toast.error("Select who paid");
+      return;
+    }
+    if (expenseForm.selectedMembers.length === 0) {
+      toast.error("Select at least one person to split with");
+      return;
+    }
 
     setIsLoading(true);
 
@@ -388,14 +396,17 @@ export default function XpenseApp() {
         });
       }
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save expense");
+      }
 
       await loadTrip(currentTrip.id);
       setShowAddExpense(false);
       setEditingExpense(null);
       toast.success(editingExpense ? "Expense updated" : "Expense added");
-    } catch {
-      toast.error("Failed to save expense");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save expense");
     } finally {
       setIsLoading(false);
     }
@@ -834,9 +845,9 @@ export default function XpenseApp() {
 
       {/* Add/Edit Expense Modal */}
       {showAddExpense && currentTrip && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setShowAddExpense(false)}>
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowAddExpense(false)}>
           <div
-            className="modal w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 pb-8"
+            className="modal w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 pb-8 max-h-[92dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between mb-4 items-center">
@@ -1024,9 +1035,9 @@ function AddMemberForm({ onAdd }: { onAdd: (name: string, phone: string) => void
   const [phone, setPhone] = React.useState("");
 
   return (
-    <div className="flex gap-2">
-      <input className="input flex-1" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-      <input className="input w-32" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
+    <div className="flex flex-wrap gap-2">
+      <input className="input flex-1 min-w-[6rem]" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+      <input className="input w-28" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
       <button
         className="btn btn-primary px-4"
         onClick={() => {
